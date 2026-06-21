@@ -1,0 +1,59 @@
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+build/
+dist/
+cmake-build-*/
+
+# IDE and Editor
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.manifest
+
+# Compiler specific
+*.d
+*.gcno
+*.gcda
+*.gcov
+
+# Dependencies
+vcpkg_installed/
+conan/
+.conan/
+
+# Testing
+Testing/
+CTestTestfile.cmake
+
+# Doxygen
+docs/html/
+docs/latex/
+docs/output/
+
+# Misc
+.cache/
+compile_commands.json
+.clangd/

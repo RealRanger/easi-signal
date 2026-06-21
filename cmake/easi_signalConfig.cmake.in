@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include(${CMAKE_CURRENT_LIST_DIR}/easi_signalTargets.cmake)
+
+check_required_components(easi_signal)
