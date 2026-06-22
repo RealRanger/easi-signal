@@ -18,16 +18,17 @@
 #endif
 
 #ifndef SIGNAL_DEBUG
-#define SIGNAL_DEBUG 1
+#define SIGNAL_DEBUG 0
 #endif
 
 // IMPLEMENTATION
 #if SIGNAL_DEBUG
-    #include <iostream>
+#include <iostream>
 #endif
 #include <cstddef>
 #include <vector>    
 #include <functional>
+#include <memory>
 
 namespace easi {
 
@@ -35,14 +36,20 @@ namespace easi {
 template<typename Signal>
 class Connection;
 
+template<typename Owner, typename... Args>
+class Signal;
+
 // Private
 namespace core {
 
-template<typename... Args>
+
+template<typename Owner, typename... Args>
 struct Event {
     // Dirty events are skipped until the next emit cycle.
     bool dirty;
     std::function<void(Args...)> callback;
+    Connection<Signal<Owner, Args...>> conn;
+
 };
 
 } // namespace core
@@ -65,19 +72,28 @@ public:
      * @param callback Function to invoke when the signal is emitted.
      * @return A Connection object that can later disconnect the callback.
      */
-    Connection<Signal> connect(std::function<void(Args...)> callback) {
-        if (is_emitting) {
-            event_vector.push_back(core::Event<Args...>{true, callback});
-        } else {
-            event_vector.push_back(core::Event<Args...>{false, callback});
-        }
+    Connection<Signal<Owner, Args...>> connect(std::function<void(Args...)> callback) {
+        bool is_dirty;
 
-        size_t index = event_vector.size() - 1;
+        if (is_emitting) {
+            is_dirty = true;
+        } else {
+            is_dirty = false;
+        }
+       
+        size_t index = event_vector.size();
         std::function<void(size_t)> sig_disconnect = [this](size_t index) {
             disconnect(index);
         };
+        Connection conn(*this, index, sig_disconnect);
 
-        return Connection(*this, index, sig_disconnect);
+        event_vector.push_back(core::Event<Owner, Args...>{is_dirty, callback, conn});
+
+        #if SIGNAL_DEBUG
+            std::cout << "Created connection" << std::endl;
+        #endif
+
+        return conn;
     }
 
 private:
@@ -127,8 +143,8 @@ private:
     }
 
     bool is_emitting = false;
-    std::vector<core::Event<Args...>> event_vector;
-    std::vector<core::Event<Args...>> dirty_event_vector;
+    std::vector<core::Event<Owner, Args...>> event_vector;
+    std::vector<core::Event<Owner, Args...>> dirty_event_vector;
 };
 
 // Each signal type is defined as a template, so we must know
@@ -137,25 +153,30 @@ template<typename Signal>
 class Connection {
 public:
     explicit Connection(Signal& signal, size_t index, std::function<void(size_t)> disconnect)
-        : signal(signal), index(index), sig_disconnect(disconnect), is_connected(true) {}
+        : signal(signal), index(index), sig_disconnect(disconnect), is_connected(std::make_shared<bool>(true)) {}
     
     void disconnect() {
-        if (!is_connected) {
+        if (!*is_connected) {
             return;
         }
 
         sig_disconnect(index);
-        is_connected = false;
+        *is_connected = false;
+
+        #if SIGNAL_DEBUG
+            std::cout << "Connection disconnected" << std::endl;
+        #endif
     }
 
     explicit operator bool() const {
-        return is_connected;
+        return *is_connected;
     }
 
 private:
     Signal& signal;
     size_t index;
-    bool is_connected;
+    // Share the same connection state across all copies
+    std::shared_ptr<bool> is_connected;
 
     std::function<void(size_t)> sig_disconnect;
 };
