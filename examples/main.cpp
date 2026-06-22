@@ -1,5 +1,7 @@
 #include <iostream>
 #include "easi/signal.hpp"
+#include <chrono>
+#include <thread>
 
 int main() {
     class MyClass {
@@ -17,7 +19,7 @@ int main() {
     };
 
     MyClass my_class;
-
+    /*
     auto conn = my_class.noargs_sig.connect([](){
         std::cout << "Connected" << std::endl;
     });
@@ -30,4 +32,17 @@ int main() {
 
     conn.disconnect();
     conn2.disconnect();
+    */
+
+    for (int i = 0; i < 10; i++) {
+        auto conn = my_class.noargs_sig.connect([]() {
+            std::cout << "Connected" << std::endl;
+        });
+
+        my_class.emit();
+
+        conn.disconnect();
+
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
+    }
 }

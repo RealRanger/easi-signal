@@ -24,6 +24,7 @@
 // IMPLEMENTATION
 #if SIGNAL_DEBUG
 #include <iostream>
+#include <chrono>
 #endif
 #include <cstddef>
 #include <vector>    
@@ -40,8 +41,46 @@ template<typename Owner, typename... Args>
 class Signal;
 
 // Private
-namespace core {
 
+#if SIGNAL_DEBUG
+namespace debug_tools {
+
+class Terminal {
+public:
+    Terminal() =  default;
+
+    void send_debug(std::string origin, std::string message) {
+        std::cout << "[debug] " << "[" << origin << "]: " << message << std::endl;
+    }
+};
+
+class Timer {
+public:
+    Timer() : start_time(), end_time() {}
+
+    void start() {
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+
+    void stop() {
+        end_time = std::chrono::high_resolution_clock::now();
+    }
+
+    double elapsed_ms() {
+        return std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    }
+
+private:
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::chrono::high_resolution_clock::time_point end_time;
+};
+
+debug_tools::Terminal terminal;
+
+}
+#endif
+
+namespace core {
 
 template<typename Owner, typename... Args>
 struct Event {
@@ -90,7 +129,7 @@ public:
         event_vector.push_back(core::Event<Owner, Args...>{is_dirty, callback, conn});
 
         #if SIGNAL_DEBUG
-            std::cout << "Created connection" << std::endl;
+            debug_tools::terminal.send_debug("easi::Signal::connect", "Created connection");
         #endif
 
         return conn;
@@ -120,6 +159,10 @@ private:
 
             e.callback(args...);
         }
+
+        #if SIGNAL_DEBUG
+            debug_tools::terminal.send_debug("easi::Signal::emit", "Emitted callbacks");
+        #endif
 
         is_emitting = false;
 
@@ -164,7 +207,8 @@ public:
         *is_connected = false;
 
         #if SIGNAL_DEBUG
-            std::cout << "Connection disconnected" << std::endl;
+            debug_tools::terminal.send_debug("easi::Connection::disconnect", "Connection disconnected");
+            
         #endif
     }
 
