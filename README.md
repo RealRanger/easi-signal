@@ -2,6 +2,8 @@
 
 # EasiSignal
 
+[![Latest Release](https://img.shields.io/github/v/release/EasiSoft/EasiSignal?include_prereleases&sort=semver)](https://github.com/EasiSoft/easi-signal/releases/latest)
+
 C++ signal library for safe event handling.  
 Designed to provide simple, type-safe connections between objects without global dependencies.
 
