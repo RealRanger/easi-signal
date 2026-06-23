@@ -14,8 +14,8 @@ int main() {
             args_sig.emit(1);
         }
 
-        easi::Signal<MyClass> noargs_sig;
-        easi::Signal<MyClass, int> args_sig;
+        easi::signal::Signal<MyClass> noargs_sig;
+        easi::signal::Signal<MyClass, int> args_sig;
     };
 
     MyClass my_class;

@@ -33,6 +33,8 @@
 
 namespace easi {
 
+namespace signal {
+
 // Forward declarations
 template<typename Signal>
 class Connection;
@@ -40,11 +42,9 @@ class Connection;
 template<typename Owner, typename... Args>
 class Signal;
 
-// Private
+namespace detail {
 
 #if SIGNAL_DEBUG
-namespace debug_tools {
-
 class Terminal {
 public:
     Terminal() =  default;
@@ -76,26 +76,40 @@ private:
 };
 
 debug_tools::Terminal terminal;
-
-}
 #endif
 
-namespace core {
-
+/**
+ * @brief Event object.
+ *
+ * @details Represents a single callback managed by a Signal.
+ * Each Event stores the callback function, its connection handle,
+ * and a dirty flag used to skip execution during an emit cycle.
+ *
+ * @tparam Owner The class type that owns and emits callbacks.
+ * @tparam Args  Parameter pack of argument types forwarded to
+ *               each callback when invoked.
+ */
 template<typename Owner, typename... Args>
 struct Event {
-    // Dirty events are skipped until the next emit cycle.
+    /// Dirty events are skipped until cleaned.
     bool dirty;
     std::function<void(Args...)> callback;
     Connection<Signal<Owner, Args...>> conn;
 
 };
 
-} // namespace core
+} // namespace detail
 
-// Public
-// Set the owner to the class that creates the signal 
-// so it is able to call emit().
+/**
+ * @brief Callback manager object.
+ *
+ * @details Stores and manages callbacks that can be
+ * connected and invoked by the owning class.
+ *
+ * @tparam Owner The class type that can emit callbacks.
+ * @tparam Args  Parameter pack of argument types forwarded to
+ *               each callback when invoked.
+ */
 template<typename Owner, typename... Args>
 class Signal {
     friend Owner;
@@ -106,7 +120,8 @@ public:
     /**
      * @brief Connects a callback to the signal.
      *
-     * If called during emission, the callback is deferred until the next cycle.
+     * @note If called during emission, the callback is deferred until the next cycle.
+     * @warning The returned Connection becomes invalid if the Signal is destroyed.
      *
      * @param callback Function to invoke when the signal is emitted.
      * @return A Connection object that can later disconnect the callback.
@@ -126,10 +141,10 @@ public:
         };
         Connection conn(*this, index, sig_disconnect);
 
-        event_vector.push_back(core::Event<Owner, Args...>{is_dirty, callback, conn});
+        event_vector.push_back(detail::Event<Owner, Args...>{is_dirty, callback, conn});
 
         #if SIGNAL_DEBUG
-            debug_tools::terminal.send_debug("easi::Signal::connect", "Created connection");
+            detail::terminal.send_debug("easi::Signal::connect", "Created connection");
         #endif
 
         return conn;
@@ -139,8 +154,7 @@ private:
     /**
      * @brief Emits all connected callbacks with the given arguments.
      *
-     * Skips "dirty" events until the next cycle, ensuring safe iteration
-     * while connections are added or removed during emission.
+     * @note Skips dirty events until the next cycle.
      *
      * @param args Arguments forwarded to each callback.
      */
@@ -161,7 +175,7 @@ private:
         }
 
         #if SIGNAL_DEBUG
-            debug_tools::terminal.send_debug("easi::Signal::emit", "Emitted callbacks");
+            detail::terminal.send_debug("easi::Signal::emit", "Emitted callbacks");
         #endif
 
         is_emitting = false;
@@ -186,18 +200,30 @@ private:
     }
 
     bool is_emitting = false;
-    std::vector<core::Event<Owner, Args...>> event_vector;
-    std::vector<core::Event<Owner, Args...>> dirty_event_vector;
+    std::vector<detail::Event<Owner, Args...>> event_vector;
+    std::vector<detail::Event<Owner, Args...>> dirty_event_vector;
 };
 
 // Each signal type is defined as a template, so we must know
 // the specific type at compile time to handle it correctly.
+/**
+ * @brief Connection object to reference and manage 
+ *        a callback inside a signal.
+ *
+ * @tparam Signal The signal type that owns the callback
+ */
 template<typename Signal>
 class Connection {
 public:
     explicit Connection(Signal& signal, size_t index, std::function<void(size_t)> disconnect)
         : signal(signal), index(index), sig_disconnect(disconnect), is_connected(std::make_shared<bool>(true)) {}
     
+    /**
+     * @brief Disconnects a callback from a signal.
+     * 
+     * @note Safe to call multiple times. Calls after the 
+     *       callback has been disconnected will be ignored.
+     */
     void disconnect() {
         if (!*is_connected) {
             return;
@@ -207,7 +233,7 @@ public:
         *is_connected = false;
 
         #if SIGNAL_DEBUG
-            debug_tools::terminal.send_debug("easi::Connection::disconnect", "Connection disconnected");
+            detail::terminal.send_debug("easi::Connection::disconnect", "Connection disconnected");
             
         #endif
     }
@@ -224,6 +250,8 @@ private:
 
     std::function<void(size_t)> sig_disconnect;
 };
+
+} // namespace signal
 
 } // namespace easi
 
