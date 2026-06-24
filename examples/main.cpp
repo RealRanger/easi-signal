@@ -2,6 +2,7 @@
 #include "easi/signal.hpp"
 #include <chrono>
 #include <thread>
+#include <string>
 
 int main() {
     namespace easi_signal = easi::signal;
@@ -34,15 +35,47 @@ int main() {
     conn2.disconnect();
     */
 
-    for (int i = 0; i < 10; i++) {
+    
+    class Timer {
+    public:
+        Timer() : start_time(), end_time() {}
+
+        void start() {
+            start_time = std::chrono::high_resolution_clock::now();
+        }
+
+        void stop() {
+            end_time = std::chrono::high_resolution_clock::now();
+        }
+
+        double elapsed_ms() {
+            return std::chrono::duration<double, std::milli>(end_time - start_time).count();
+        }
+
+    private:
+        std::chrono::high_resolution_clock::time_point start_time;
+        std::chrono::high_resolution_clock::time_point end_time;
+    };
+
+
+    auto timer = Timer();
+    timer.start();
+
+    for (int i = 0; i < 1'000'000; i++) {
         auto conn = my_class.noargs_sig.connect([]() {
-            std::cout << "Connected" << std::endl;
+            volatile int result = 1;
+            for (int j = 1; j < 100; j++) {
+                result = (result * j) % 97;
+            }
         });
-
-        my_class.emit();
-
-        conn.disconnect();
-
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
+    timer.stop();
+
+    std::cout << "Connection took " << std::to_string(timer.elapsed_ms() / 1000) << " seconds." << std::endl;
+
+    auto timer_2 = Timer();
+    timer_2.start();
+    my_class.emit();
+    timer_2.stop();
+    std::cout << "Emission took " << std::to_string(timer_2.elapsed_ms() / 1000) << " seconds." << std::endl;
 }

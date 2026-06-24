@@ -203,6 +203,7 @@ protected:
 
         #if SIGNAL_DEBUG
             detail::terminal.send_debug("easi::Signal::emit", "Emitted callbacks");
+            std::cout << "[debug] [easi::Signal::emit]: Callback vector size: " << event_vector.size() << std::endl;
         #endif
 
         is_emitting = false;
