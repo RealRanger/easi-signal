@@ -42,6 +42,11 @@ class Connection;
 template<typename Owner, typename... Args>
 class Signal;
 
+struct shared_own {};
+
+template<typename T>
+struct unique_own {};
+
 namespace detail {
 
 #if SIGNAL_DEBUG
@@ -75,7 +80,7 @@ private:
     std::chrono::high_resolution_clock::time_point end_time;
 };
 
-debug_tools::Terminal terminal;
+    Terminal terminal;
 #endif
 
 /**
@@ -89,16 +94,36 @@ debug_tools::Terminal terminal;
  * @tparam Args  Parameter pack of argument types forwarded to
  *               each callback when invoked.
  */
+
 template<typename Owner, typename... Args>
 struct Event {
-    /// Dirty events are skipped until cleaned.
+    bool dirty;
+    std::function<void(Args...)> callback;
+    Connection<Signal<Owner, Args...>> conn;
+};
+
+template<typename Owner, typename... Args>
+struct EventBase {
+
     bool dirty;
     std::function<void(Args...)> callback;
     Connection<Signal<Owner, Args...>> conn;
 
 };
 
+template <typename... Args>
+struct Event<shared_own, Args...>
+    : EventBase<shared_own, Args...>
+{
+    using Base = EventBase<shared_own, Args...>;
+    using Base::dirty;
+    using Base::callback;
+    using Base::conn;
+};
+
 } // namespace detail
+
+
 
 /**
  * @brief Callback manager object.
@@ -111,11 +136,9 @@ struct Event {
  *               each callback when invoked.
  */
 template<typename Owner, typename... Args>
-class Signal {
-    friend Owner;
-
+class SignalBase {
 public:
-    explicit Signal() = default;
+    explicit SignalBase() = default;
 
     /**
      * @brief Connects a callback to the signal.
@@ -139,9 +162,14 @@ public:
         std::function<void(size_t)> sig_disconnect = [this](size_t index) {
             disconnect(index);
         };
-        Connection conn(*this, index, sig_disconnect);
+        using SignalType = Signal<Owner, Args...>;
+        Connection<SignalType> conn(index, sig_disconnect);
 
-        event_vector.push_back(detail::Event<Owner, Args...>{is_dirty, callback, conn});
+        detail::Event<Owner, Args...> ev;
+        ev.dirty = is_dirty;
+        ev.callback = std::move(callback);
+        ev.conn = conn;
+        event_vector.push_back(std::move(ev));
 
         #if SIGNAL_DEBUG
             detail::terminal.send_debug("easi::Signal::connect", "Created connection");
@@ -150,7 +178,7 @@ public:
         return conn;
     }
 
-private:
+protected:
     /**
      * @brief Emits all connected callbacks with the given arguments.
      *
@@ -160,7 +188,6 @@ private:
      */
     void emit(Args... args) {
         is_emitting = true ;
-
         for (auto& e : event_vector) {
             if (!e.callback) {
                 continue;
@@ -204,6 +231,38 @@ private:
     std::vector<detail::Event<Owner, Args...>> dirty_event_vector;
 };
 
+template<typename... Args>
+class Signal<shared_own, Args...>
+    : public SignalBase<shared_own, Args...> 
+{
+public:
+    using Base = SignalBase<shared_own, Args...>;
+
+    using Base::connect;
+    using Base::emit;
+
+private:
+    using Base::disconnect;
+
+};
+
+template<typename Owner, typename... Args>
+class Signal<unique_own<Owner>, Args...>
+    : public SignalBase<unique_own<Owner>, Args...> 
+{
+    friend Owner;
+
+public:
+    using Base = SignalBase<unique_own<Owner>, Args...>;
+
+    using Base::connect;
+
+private:
+    using Base::emit;
+    using Base::disconnect;
+
+};
+
 // Each signal type is defined as a template, so we must know
 // the specific type at compile time to handle it correctly.
 /**
@@ -215,8 +274,10 @@ private:
 template<typename Signal>
 class Connection {
 public:
-    explicit Connection(Signal& signal, size_t index, std::function<void(size_t)> disconnect)
-        : signal(signal), index(index), sig_disconnect(disconnect), is_connected(std::make_shared<bool>(true)) {}
+    Connection() : index(static_cast<size_t>(-1)), is_connected(std::make_shared<bool>(false)), sig_disconnect(nullptr) {}
+    
+    explicit Connection(size_t index, std::function<void(size_t)> disconnect)
+        : index(index), sig_disconnect(disconnect), is_connected(std::make_shared<bool>(true)) {}
     
     /**
      * @brief Disconnects a callback from a signal.
@@ -243,7 +304,6 @@ public:
     }
 
 private:
-    Signal& signal;
     size_t index;
     // Share the same connection state across all copies
     std::shared_ptr<bool> is_connected;
@@ -255,4 +315,4 @@ private:
 
 } // namespace easi
 
-#endif // EVENTS_HPP
+#endif // SIGNAL_HPP

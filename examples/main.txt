@@ -4,8 +4,6 @@
 #include <thread>
 
 int main() {
-    namespace easi_signal = easi::signal;
-
     class MyClass {
     public:
         MyClass() = default;
@@ -13,9 +11,11 @@ int main() {
         
         void emit() {
             noargs_sig.emit();
+            args_sig.emit(1);
         }
 
-        easi_signal::Signal<easi_signal::unique_own<MyClass>> noargs_sig;
+        easi::signal::Signal<MyClass> noargs_sig;
+        easi::signal::Signal<MyClass, int> args_sig;
     };
 
     MyClass my_class;
