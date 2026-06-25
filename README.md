@@ -21,14 +21,14 @@ Set via preprocessor macros:
 - `SIGNAL_DEBUG` (default: `0` = disabled, set to `1` to enable)  
   Enable debug logging and timing.
 
-## Example
+## Usage
 
 ```cpp
 // No arg callback
 #include "signal.hpp"
 
 struct Button {
-    easi::Signal<Button> onClick;
+    easi::signal::Signal<easi::signal::unique_own<Button>> onClick;
     void click() { onClick.emit(); }
 };
 
@@ -45,7 +45,7 @@ auto conn = btn.onClick.connect([]() {
 #include <string>
 
 struct Button {
-    easi::Signal<Button, int, std::string> onClick;
+    easi::signal::Signal<easi::signal::unique_own<Button>, int, std::string> onClick;
     void click() { onClick.emit(404, "Failed to fetch data"); }
 };
 
