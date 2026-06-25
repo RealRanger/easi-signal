@@ -121,6 +121,11 @@ struct Event<shared_own, Args...>
     using Base::conn;
 };
 
+template<typename Owner, typename... Args>
+struct Slot {
+    Event<Owner, Args...> event;
+};
+
 } // namespace detail
 
 
@@ -137,6 +142,7 @@ struct Event<shared_own, Args...>
  */
 template<typename Owner, typename... Args>
 class SignalBase {
+    friend Connection;
 public:
     explicit SignalBase() = default;
 
@@ -151,31 +157,60 @@ public:
      */
     Connection<Signal<Owner, Args...>> connect(std::function<void(Args...)> callback) {
         bool is_dirty;
+        Connection<Signal<Owner, Args...>> connection;
 
         if (is_emitting) {
             is_dirty = true;
         } else {
             is_dirty = false;
         }
+
+
+        if (!available_slots.empty()) {
+            size_t index = available_slots.back();
+            available_slots.pop_back();
+
+            std::function<void(size_t)> sig_disconnect = [this](size_t index) {
+                disconnect(index);
+            };
+            using SignalType = Signal<Owner, Args...>;
+            Connection<SignalType> conn(index, sig_disconnect);
+
+            detail::Event<Owner, Args...> ev;
+            ev.dirty = is_dirty;
+            ev.callback = std::move(callback);
+            ev.conn = conn;
+            connection = conn;
+
+            slot_vector[index].event = ev;
+            
+        } else {
+
+            size_t index = slot_vector.size();
+            
+            std::function<void(size_t)> sig_disconnect = [this](size_t index) {
+                disconnect(index);
+            };
+            using SignalType = Signal<Owner, Args...>;
+            Connection<SignalType> conn(index, sig_disconnect);
+
+            detail::Event<Owner, Args...> ev;
+            ev.dirty = is_dirty;
+            ev.callback = std::move(callback);
+            ev.conn = conn;
+            connection = conn;
+
+            detail::Slot<Owner, Args...> slot;
+            slot.event = std::move(ev);
+
+            slot_vector.push_back(std::move(slot));
+        }
        
-        size_t index = event_vector.size();
-        std::function<void(size_t)> sig_disconnect = [this](size_t index) {
-            disconnect(index);
-        };
-        using SignalType = Signal<Owner, Args...>;
-        Connection<SignalType> conn(index, sig_disconnect);
-
-        detail::Event<Owner, Args...> ev;
-        ev.dirty = is_dirty;
-        ev.callback = std::move(callback);
-        ev.conn = conn;
-        event_vector.push_back(std::move(ev));
-
         #if SIGNAL_DEBUG
             detail::terminal.send_debug("easi::Signal::connect", "Created connection");
         #endif
 
-        return conn;
+        return connection;
     }
 
 protected:
@@ -188,17 +223,17 @@ protected:
      */
     void emit(Args... args) {
         is_emitting = true ;
-        for (auto& e : event_vector) {
-            if (!e.callback) {
+        for (auto& s : slot_vector) {
+            if (!s.event.callback) {
                 continue;
             }
 
-            if (e.dirty) {
-                dirty_event_vector.push_back(e);
+            if (s.event.dirty) {
+                dirty_event_vector.push_back(s);
                 continue;
             }
 
-            e.callback(args...);
+            s.event.callback(args...);
         }
 
         #if SIGNAL_DEBUG
@@ -208,8 +243,8 @@ protected:
 
         is_emitting = false;
 
-        for (auto& e : dirty_event_vector) {
-            e.dirty = false;
+        for (auto& s : dirty_event_vector) {
+            s.event.dirty = false;
         }
         dirty_event_vector.clear();
     }
@@ -224,12 +259,15 @@ protected:
      */
     void disconnect(size_t index) {
         // Avoid shifting the vector index by setting to inactive instead of removing.
-        event_vector[index].callback = nullptr;
+        slot_vector[index].event.callback = nullptr;
+        available_slots.push_back(index);
     }
 
+
     bool is_emitting = false;
-    std::vector<detail::Event<Owner, Args...>> event_vector;
-    std::vector<detail::Event<Owner, Args...>> dirty_event_vector;
+    std::vector<detail::Slot<Owner, Args...>> slot_vector;
+    std::vector<size_t> available_slots;
+    std::vector<detail::Slot<Owner, Args...>> dirty_event_vector;
 };
 
 template<typename... Args>
