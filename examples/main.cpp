@@ -57,17 +57,19 @@ int main() {
         std::chrono::high_resolution_clock::time_point end_time;
     };
 
-
+    /*
     auto timer = Timer();
     timer.start();
 
-    for (int i = 0; i < 1'000'000; i++) {
+    for (int i = 0; i < 100; i++) {
         auto conn = my_class.noargs_sig.connect([]() {
             volatile int result = 1;
             for (int j = 1; j < 100; j++) {
                 result = (result * j) % 97;
             }
         });
+
+        conn.disconnect();
     }
     timer.stop();
 
@@ -78,4 +80,27 @@ int main() {
     my_class.emit();
     timer_2.stop();
     std::cout << "Emission took " << std::to_string(timer_2.elapsed_ms() / 1000) << " seconds." << std::endl;
+    */
+
+    {
+        auto conn = my_class.noargs_sig.connect([](){
+            std::cout << "Connected" << std::endl;
+        });
+
+        conn.disconnect();
+    }
+    
+    my_class.emit();
+
+    {
+        auto conn = my_class.noargs_sig.connect([](){
+            std::cout << "Connected" << std::endl;
+        });
+
+        conn.disconnect();
+    }
+
+    my_class.emit();
+
+
 }

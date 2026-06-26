@@ -18,7 +18,7 @@
 #endif
 
 #ifndef SIGNAL_DEBUG
-#define SIGNAL_DEBUG 0
+#define SIGNAL_DEBUG 1
 #endif
 
 // IMPLEMENTATION
@@ -142,8 +142,11 @@ struct Slot {
  */
 template<typename Owner, typename... Args>
 class SignalBase {
-    friend Connection;
+    template<typename S>
+    friend class Connection;
 public:
+    using ThisSignal = Signal<Owner, Args...>;
+
     explicit SignalBase() = default;
 
     /**
@@ -174,7 +177,7 @@ public:
                 disconnect(index);
             };
             using SignalType = Signal<Owner, Args...>;
-            Connection<SignalType> conn(index, sig_disconnect);
+            Connection<SignalType> conn(static_cast<ThisSignal&>(*this), index);
 
             detail::Event<Owner, Args...> ev;
             ev.dirty = is_dirty;
@@ -188,11 +191,8 @@ public:
 
             size_t index = slot_vector.size();
             
-            std::function<void(size_t)> sig_disconnect = [this](size_t index) {
-                disconnect(index);
-            };
             using SignalType = Signal<Owner, Args...>;
-            Connection<SignalType> conn(index, sig_disconnect);
+            Connection<SignalType> conn(static_cast<ThisSignal&>(*this), index);
 
             detail::Event<Owner, Args...> ev;
             ev.dirty = is_dirty;
@@ -238,7 +238,7 @@ protected:
 
         #if SIGNAL_DEBUG
             detail::terminal.send_debug("easi::Signal::emit", "Emitted callbacks");
-            std::cout << "[debug] [easi::Signal::emit]: Callback vector size: " << event_vector.size() << std::endl;
+            std::cout << "[debug] [easi::Signal::emit]: Callback vector size: " << slot_vector.size() << std::endl;
         #endif
 
         is_emitting = false;
@@ -280,9 +280,6 @@ public:
     using Base::connect;
     using Base::emit;
 
-private:
-    using Base::disconnect;
-
 };
 
 template<typename Owner, typename... Args>
@@ -298,7 +295,7 @@ public:
 
 private:
     using Base::emit;
-    using Base::disconnect;
+  
 
 };
 
@@ -313,10 +310,15 @@ private:
 template<typename Signal>
 class Connection {
 public:
-    Connection() : index(static_cast<size_t>(-1)), is_connected(std::make_shared<bool>(false)), sig_disconnect(nullptr) {}
+    Connection() : sig(nullptr), index(static_cast<size_t>(-1)), is_connected(std::make_shared<bool>(false)) {}
     
-    explicit Connection(size_t index, std::function<void(size_t)> disconnect)
-        : index(index), sig_disconnect(disconnect), is_connected(std::make_shared<bool>(true)) {}
+    explicit Connection(Signal& sig, size_t index)
+        : sig(&sig), index(index), is_connected(std::make_shared<bool>(true)) {}
+
+    Connection(const Connection&) = default;
+    Connection& operator=(const Connection&) = default;
+    Connection(Connection&&) = default;
+    Connection& operator=(Connection&&) = default;
     
     /**
      * @brief Disconnects a callback from a signal.
@@ -329,7 +331,9 @@ public:
             return;
         }
 
-        sig_disconnect(index);
+        if (sig) {
+            sig->disconnect(index);
+        }
         *is_connected = false;
 
         #if SIGNAL_DEBUG
@@ -343,11 +347,10 @@ public:
     }
 
 private:
+    Signal* sig;
     size_t index;
     // Share the same connection state across all copies
     std::shared_ptr<bool> is_connected;
-
-    std::function<void(size_t)> sig_disconnect;
 };
 
 } // namespace signal
