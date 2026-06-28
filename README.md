@@ -1,4 +1,4 @@
-![Alt text](assets/easi-signal-banner.png)
+![Alt text](assets/easi-signal-banner-3.png)
 
 # EasiSignal
 
